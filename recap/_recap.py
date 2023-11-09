@@ -6,7 +6,7 @@ import uuid
 import httpx
 import sentry_sdk
 import pathlib
-from sentry_sdk.integrations.atexit import AtexitIntegration
+from sentry_sdk import Hub
 from typing import Any, Dict, Optional
 from filelock import FileLock
 
@@ -97,15 +97,16 @@ def sync_crashes_sentry(
             max_breadcrumbs=0,
             enable_tracing=False,
             default_integrations=False,
-            #integrations=[
-            #    AtexitIntegration(),
-            #],
         )
         for crash in fetch_crashes_from_server(base_url, crash_endpoint, auth, latest_id=latest_id):
             latest_id = max(latest_id, crash["id"])
             event = construct_event(crash)
             sentry_sdk.capture_event(event)
             sentry_sdk.flush()
+        
+        client = Hub.current.client
+        if client is not None:
+            client.close(timeout=5.0)
         logger.debug(f"Writing latest ID {latest_id} to state file {state_file_path}")
         state_file_path.write_text(str(latest_id))
 
